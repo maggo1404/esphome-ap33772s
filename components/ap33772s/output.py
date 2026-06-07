@@ -4,7 +4,7 @@ from esphome.components import i2c, output
 from esphome.const import CONF_ID
 
 DEPENDENCIES = ["i2c"]
-CODEOWNERS = ["@dc8wan"]
+CODEOWNERS = ["@maggo1404"]
 
 ap33772s_ns = cg.esphome_ns.namespace("ap33772s")
 AP33772SOutput = ap33772s_ns.class_(
@@ -18,7 +18,7 @@ CONFIG_SCHEMA = (
         }
     )
     .extend(cv.COMPONENT_SCHEMA)
-    .extend(i2c.i2c_device_schema(0x51))
+    .extend(i2c.i2c_device_schema(0x52))
 )
 
 
