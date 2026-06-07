@@ -1,5 +1,6 @@
 #include "ap33772s.h"
 #include "esphome/core/log.h"
+#include "esphome/core/helpers.h"
 #include <algorithm>
 
 namespace esphome {
@@ -8,6 +9,7 @@ namespace ap33772s {
 static const char *const TAG = "ap33772s";
 
 // AP33772S Registermap (DS46176), I2C-Adresse 0x52
+static const uint8_t REG_STATUS = 0x01;  // 1 Byte Status
 static const uint8_t REG_SRCPDO = 0x20;  // 26 Byte: 13 PDOs a 2 Byte (LE)
 static const uint8_t REG_REQMSG = 0x31;  // 2 Byte: PD-Anforderung
 
@@ -16,11 +18,8 @@ void AP33772SOutput::setup() {
   this->try_read_pdos_();
 }
 
-// PDO-Discovery mit Wiederholung, falls die PD-Verhandlung beim Boot
-// noch nicht abgeschlossen ist (max. ~10 s).
 void AP33772SOutput::try_read_pdos_() {
   if (this->read_pdos_()) {
-    // Beim Start die niedrigste Spannung anfordern (haelt den ESP32 am Leben)
     this->request_index_(this->pdos_.front().index);
     return;
   }
@@ -32,27 +31,41 @@ void AP33772SOutput::try_read_pdos_() {
 }
 
 bool AP33772SOutput::read_pdos_() {
+  // --- DIAGNOSE: STATUS lesen ---
+  uint8_t status = 0xAB;
+  auto st_err = this->read_register(REG_STATUS, &status, 1);
+  if (this->retries_ < 6)
+    ESP_LOGI(TAG, "[try %u] STATUS read err=%d val=0x%02X", this->retries_, (int) st_err, status);
+
+  // --- SRCPDO lesen (26 Byte) ---
   uint8_t buf[26] = {};
-  if (this->read_register(REG_SRCPDO, buf, sizeof(buf)) != i2c::ERROR_OK)
+  auto err = this->read_register(REG_SRCPDO, buf, sizeof(buf));
+  if (this->retries_ < 6) {
+    ESP_LOGI(TAG, "[try %u] SRCPDO read err=%d", this->retries_, (int) err);
+    ESP_LOGI(TAG, "[try %u] raw: %s", this->retries_,
+             format_hex_pretty(buf, sizeof(buf)).c_str());
+  }
+  if (err != i2c::ERROR_OK)
     return false;
 
   this->pdos_.clear();
   for (uint8_t slot = 0; slot < 13; slot++) {
-    // 16-bit PDO, little-endian
     uint16_t raw = (uint16_t) buf[slot * 2] | ((uint16_t) buf[slot * 2 + 1] << 8);
-    bool detect = raw & 0x8000;       // Bit15: Slot belegt
-    bool is_apdo = raw & 0x4000;      // Bit14: 1 = PPS/AVS, 0 = Fixed
+    if (raw != 0 && this->retries_ < 6)
+      ESP_LOGI(TAG, "[try %u] Slot %u raw=0x%04X (detect=%u apdo=%u vmax=%u)",
+               this->retries_, slot + 1, raw, (raw >> 15) & 1, (raw >> 14) & 1, raw & 0xFF);
+
+    bool detect = raw & 0x8000;
+    bool is_apdo = raw & 0x4000;
     if (!detect || is_apdo)
-      continue;                       // nur belegte Fixed-PDOs
-    uint16_t vmax = raw & 0x00FF;     // Bits[7:0]
-    // SPR (Slot 1-7): x100 mV, EPR (Slot 8-13): x200 mV
+      continue;
+    uint16_t vmax = raw & 0x00FF;
     uint16_t mv = (slot < 7) ? (uint16_t)(vmax * 100) : (uint16_t)(vmax * 200);
     if (mv == 0)
       continue;
     this->pdos_.push_back(FixedPdo{(uint8_t)(slot + 1), mv});
   }
 
-  // Nach Spannung aufsteigend sortieren (5V -> 20V)
   std::sort(this->pdos_.begin(), this->pdos_.end(),
             [](const FixedPdo &a, const FixedPdo &b) { return a.mv < b.mv; });
 
@@ -71,7 +84,7 @@ void AP33772SOutput::write_state(float state) {
   int n = (int) this->pdos_.size();
   int idx;
   if (state <= 0.0f) {
-    idx = 0;                          // niedrigste Spannung
+    idx = 0;
   } else {
     idx = (int) (state * (float) n);
     if (idx >= n)
@@ -84,10 +97,8 @@ void AP33772SOutput::write_state(float state) {
 }
 
 void AP33772SOutput::request_index_(uint8_t pdo_index) {
-  // PD_REQMSG: [15:12]=PDO_INDEX, [11:8]=CURRENT_SEL, [7:0]=VOLTAGE_SEL
-  // CURRENT_SEL=0xF + VOLTAGE_SEL=0xFF => Max-Strom & Max-Spannung des PDO
   uint16_t msg = ((uint16_t) pdo_index << 12) | 0x0FFF;
-  uint8_t data[2] = {(uint8_t)(msg & 0xFF), (uint8_t)(msg >> 8)};  // little-endian
+  uint8_t data[2] = {(uint8_t)(msg & 0xFF), (uint8_t)(msg >> 8)};
   if (this->write_register(REG_REQMSG, data, 2) == i2c::ERROR_OK) {
     this->current_index_ = pdo_index;
     uint16_t mv = 0;
