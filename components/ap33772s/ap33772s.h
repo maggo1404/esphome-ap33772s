@@ -21,14 +21,21 @@ class AP33772SOutput : public output::FloatOutput,
   void write_state(float state) override;
   float get_setup_priority() const override { return setup_priority::DATA; }
 
+  // Zuletzt gemessene VOUT-Spannung (mV) und ausgehandelte Spannung (mV)
+  uint16_t get_measured_mv() const { return this->measured_mv_; }
+  uint16_t get_requested_mv() const { return this->requested_mv_; }
+
  protected:
   std::vector<FixedPdo> pdos_;
   int current_index_{-1};
   uint8_t retries_{0};
+  uint16_t measured_mv_{0};
+  uint16_t requested_mv_{0};
 
   void try_read_pdos_();
   bool read_pdos_();
   void request_index_(uint8_t pdo_index);
+  void read_voltage_();
 };
 
 }  // namespace ap33772s

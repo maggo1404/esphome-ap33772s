@@ -9,13 +9,17 @@ namespace ap33772s {
 static const char *const TAG = "ap33772s";
 
 // AP33772S Registermap (DS46176), I2C-Adresse 0x52
-static const uint8_t REG_STATUS = 0x01;  // 1 Byte Status
-static const uint8_t REG_SRCPDO = 0x20;  // 26 Byte: 13 PDOs a 2 Byte (LE)
-static const uint8_t REG_REQMSG = 0x31;  // 2 Byte: PD-Anforderung
+static const uint8_t REG_STATUS  = 0x01;  // 1 Byte Status
+static const uint8_t REG_VOLTAGE = 0x11;  // 2 Byte VOUT, LSB 80 mV
+static const uint8_t REG_VREQ    = 0x14;  // 2 Byte ausgehandelte Spannung, LSB 50 mV
+static const uint8_t REG_SRCPDO  = 0x20;  // 26 Byte: 13 PDOs a 2 Byte (LE)
+static const uint8_t REG_REQMSG  = 0x31;  // 2 Byte: PD-Anforderung
 
 void AP33772SOutput::setup() {
   ESP_LOGCONFIG(TAG, "Initialisiere AP33772S ...");
   this->try_read_pdos_();
+  // VOUT/VREQ regelmaessig lesen und loggen
+  this->set_interval("voltage", 3000, [this]() { this->read_voltage_(); });
 }
 
 void AP33772SOutput::try_read_pdos_() {
@@ -28,6 +32,20 @@ void AP33772SOutput::try_read_pdos_() {
   } else {
     ESP_LOGE(TAG, "Keine Fixed-PDOs gefunden - PD-Quelle/Verhandlung pruefen!");
   }
+}
+
+void AP33772SOutput::read_voltage_() {
+  uint8_t v[2] = {};
+  if (this->read_register(REG_VOLTAGE, v, 2) == i2c::ERROR_OK) {
+    uint16_t raw = (uint16_t) v[0] | ((uint16_t) v[1] << 8);  // little-endian
+    this->measured_mv_ = (uint16_t)(raw * 80);                // LSB 80 mV
+  }
+  uint8_t r[2] = {};
+  if (this->read_register(REG_VREQ, r, 2) == i2c::ERROR_OK) {
+    uint16_t raw = (uint16_t) r[0] | ((uint16_t) r[1] << 8);  // little-endian
+    this->requested_mv_ = (uint16_t)(raw * 50);               // LSB 50 mV
+  }
+  ESP_LOGI(TAG, "VOUT=%u mV  (ausgehandelt/VREQ=%u mV)", this->measured_mv_, this->requested_mv_);
 }
 
 bool AP33772SOutput::read_pdos_() {
