@@ -35,7 +35,7 @@ class AP33772SOutput : public output::FloatOutput,
   }
 
  protected:
-  uint16_t max_mv_{15000};
+  uint16_t max_mv_{12000};
   uint16_t min_mv_{5000};
   bool prefer_pps_{true};
 
