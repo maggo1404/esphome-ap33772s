@@ -6,7 +6,7 @@
 
 ## English
 
-An [ESPHome](https://esphome.io) external component for the **Diodes AP33772S** USB Power Delivery sink controller. It exposes the AP33772S as a **float output**, so you can set the voltage a USB‑C PD power supply delivers from ESPHome / Home Assistant.
+An [ESPHome](https://esphome.io) external component for the **AP33772S** USB Power Delivery sink controller. It exposes the AP33772S as a **float output**, so you can set the voltage a USB‑C PD power supply delivers from ESPHome / Home Assistant.
 
 ### Features
 
