@@ -114,7 +114,7 @@ The voltage on VBUS can rise to the configured maximum. Make sure every connecte
 
 ## Deutsch
 
-Eine externe [ESPHome](https://esphome.io)-Komponente für den USB‑Power‑Delivery‑Sink‑Controller **Diodes AP33772S**. Der AP33772S wird als **Float‑Output** bereitgestellt, sodass die Spannung eines USB‑C‑PD‑Netzteils direkt aus ESPHome / Home Assistant eingestellt werden kann.
+Eine externe [ESPHome](https://esphome.io)-Komponente für den USB‑Power‑Delivery‑Sink‑Controller **AP33772S**. Der AP33772S wird als **Float‑Output** bereitgestellt, sodass die Spannung eines USB‑C‑PD‑Netzteils direkt aus ESPHome / Home Assistant eingestellt werden kann.
 
 ### Funktionen
 
